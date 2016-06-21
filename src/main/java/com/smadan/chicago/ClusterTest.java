@@ -44,11 +44,15 @@ public class ClusterTest {
     public void writeTSSequence() throws Exception{
         byte[] offset = null;
         String tsKey = "testKey";
+        deleteColFam(tsKey);
         List<String> nodes = testChicagoCluster.chicagoTSClient.getNodeList(tsKey.getBytes());
         for (int i = 0; i < 30; i++) {
             String _v = "val" + i;
             byte[] val = _v.getBytes();
-            assert(testChicagoCluster.chicagoTSClient.write(tsKey.getBytes(), val) != null);
+            int valO = Ints.fromByteArray(testChicagoCluster.chicagoTSClient.write(tsKey.getBytes(), val));
+            if(valO != i ){
+                throw new Exception("Value does not match");
+            }
         }
         assertTSClient(tsKey,29,"val29");
 
@@ -56,9 +60,13 @@ public class ClusterTest {
         int key  = 29;
         String val  = "value29";
         //write
-        assert(29 == Ints.fromByteArray(testChicagoCluster.chicagoTSClient._write(tsKey.getBytes(),Ints.toByteArray(key), val.getBytes()).get()));
+        int v = Ints.fromByteArray(testChicagoCluster.chicagoTSClient._write(tsKey.getBytes(),Ints.toByteArray(key), val.getBytes()).get());
+        if(v != 29){
+            throw new Exception("Atomic integer is out of sync.");
+        }
         //Assert no overwrite took place
         assertTSClient(tsKey,key,"val29");
+        //deleteColFam(tsKey);
     }
 
     public void assertTSClient(String colFam, int key, String val){
@@ -84,7 +92,10 @@ public class ClusterTest {
             String key = "key"+i;
             String _v = "val" + i;
             byte[] val = _v.getBytes();
-            assert(testChicagoCluster.chicagoClient.write(key.getBytes(), val) != false);
+            boolean res = testChicagoCluster.chicagoClient.write(key.getBytes(), val);
+            if(!res){
+                throw new Exception("Write failed.");
+            }
         }
 
         //Assert all nodes have the data
@@ -93,9 +104,13 @@ public class ClusterTest {
         //Test overwriting of data
         String key = "key29";
         String val  = "value29";
-        assert(testChicagoCluster.chicagoClient.write(key.getBytes(), val.getBytes()) != false);
+        boolean res = testChicagoCluster.chicagoClient.write(key.getBytes(), val.getBytes());
+        if(!res){
+            throw new Exception("Write failed.");
+        }
         //Assert overwrite is successful
         assertCCdata(key,val);
+        deleteColFam("chicago");
     }
 
     public void assertCCdata(String key,String val){
@@ -115,6 +130,7 @@ public class ClusterTest {
 
     public void testReplication() throws Exception{
         String tsKey = "tsRepKey";
+        deleteColFam(tsKey);
         List<String> nodes = testChicagoCluster.chicagoTSClient.getNodeList(tsKey.getBytes());
         assert(true == !testChicagoCluster.zkClient.list("/chicago/node-list").isEmpty());
         //Write some data.
@@ -227,8 +243,8 @@ public class ClusterTest {
         ClusterTest ct = new ClusterTest();
         try{
             ct.setup();
-            //ct.writeTSSequence();
-            //ct.writeCCSequence();
+            ct.writeTSSequence();
+            ct.writeCCSequence();
             ct.testReplication();
         }catch (Exception e){
             e.printStackTrace();

@@ -149,7 +149,7 @@ public class ClusterTest {
             Thread.sleep(10);
             repNodes = testChicagoCluster.zkClient.list(path);
         }
-        Thread.sleep(3000);
+        Thread.sleep(2000);
         assertTSClient(tsKey,90,"val90");
 
 
@@ -158,7 +158,7 @@ public class ClusterTest {
         command = "sudo sh -c \"cd /home/smadan/chicago; ./chicago &\"";
         remoteExec(server,command);
 
-        Thread.sleep(5000);
+        Thread.sleep(2000);
         assertTSClient(tsKey,90,"val90");
 
         deleteColFam(tsKey);

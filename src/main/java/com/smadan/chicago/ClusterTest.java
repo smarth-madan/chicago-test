@@ -67,7 +67,9 @@ public class ClusterTest {
             System.out.println("Checking node "+n);
             try {
                 ChicagoClient cc = new ChicagoClient(n);
-                assert(val.equals(new String(cc.read(colFam.getBytes(), Ints.toByteArray(key)).get())));
+                if(!val.equals(new String(cc.read(colFam.getBytes(), Ints.toByteArray(key)).get()))){
+                    throw new Exception("assertTSClient : Value does not match");
+                }
             }catch (Exception e){
                 e.printStackTrace();
                 return;
@@ -101,7 +103,9 @@ public class ClusterTest {
         nodes.forEach(n -> {
             ChicagoClient cc = testChicagoCluster.chicagoClientHashMap.get(forServer(n));
             try {
-                assert(val.equals(new String(cc.read(key.getBytes()).get())));
+                if(!val.equals(new String(cc.read(key.getBytes()).get()))){
+                    throw new Exception("assertCCClient : Value does not match");
+                }
             }catch (Exception e){
                 e.printStackTrace();
             }
@@ -114,10 +118,11 @@ public class ClusterTest {
         List<String> nodes = testChicagoCluster.chicagoTSClient.getNodeList(tsKey.getBytes());
         assert(true == !testChicagoCluster.zkClient.list("/chicago/node-list").isEmpty());
         //Write some data.
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < 200; i++) {
             String _v = "val" + i;
             byte[] val = _v.getBytes();
-            assert(testChicagoCluster.chicagoTSClient.write(tsKey.getBytes(), val) != null);
+            testChicagoCluster.chicagoTSClient.write(tsKey.getBytes(), val);
+            if(i%50==0) System.out.println(i);
         }
         assertTSClient(tsKey,90,"val90");
 
@@ -136,6 +141,7 @@ public class ClusterTest {
         while(repNodes.isEmpty()){
             repNodes = testChicagoCluster.zkClient.list(path);
         }
+        System.out.println("Lock path populated in "+ (System.currentTimeMillis() - startTime) + "ms");
 
         assertTSClient(tsKey,90,"val90");
         repNodes = testChicagoCluster.zkClient.list(path);
@@ -155,7 +161,18 @@ public class ClusterTest {
         Thread.sleep(5000);
         assertTSClient(tsKey,90,"val90");
 
+        deleteColFam(tsKey);
+    }
 
+    public void deleteColFam(String colFam){
+        for(String server : servers.values()){
+            try {
+                ChicagoClient cc = new ChicagoClient(server);
+                cc.deleteColFam(colFam.getBytes()).get();
+            }catch(Exception e){
+                e.printStackTrace();
+            }
+        }
     }
 
     public void remoteExec(String ip, String command) throws Exception{
@@ -210,12 +227,13 @@ public class ClusterTest {
         ClusterTest ct = new ClusterTest();
         try{
             ct.setup();
-            ct.writeTSSequence();
-            ct.writeCCSequence();
+            //ct.writeTSSequence();
+            //ct.writeCCSequence();
             ct.testReplication();
         }catch (Exception e){
-
+            e.printStackTrace();
         }
+        System.exit(0);
     }
 
 

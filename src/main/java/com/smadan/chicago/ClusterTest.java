@@ -6,21 +6,25 @@ import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import com.xjeffrose.chicago.client.ChicagoClient;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runners.Parameterized;
 
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 
-
 /**
  * Created by smadan on 6/20/16.
  */
+
 public class ClusterTest {
 
     TestChicagoCluster testChicagoCluster;
-    HashMap<String,String> servers = new HashMap<>();
+   HashMap<String,String> servers = new HashMap<>();
 
-    public void setup() throws  Exception{
+   @Before
+    public  void  setup() throws  Exception{
         servers.put("s1","10.24.25.188:12000");
         servers.put("s2","10.24.33.123:12000");
         servers.put("s3","10.24.25.189:12000");
@@ -41,6 +45,7 @@ public class ClusterTest {
         return result;
     }
 
+    @Test
     public void writeTSSequence() throws Exception{
         byte[] offset = null;
         String tsKey = "testKey";
@@ -85,6 +90,7 @@ public class ClusterTest {
         });
     }
 
+    @Test @Parameterized.Parameters
     public void writeCCSequence() throws Exception{
         byte[] offset = null;
         List<String> nodes=null;
@@ -113,6 +119,7 @@ public class ClusterTest {
         deleteColFam("chicago");
     }
 
+
     public void assertCCdata(String key,String val){
         List<String> nodes = testChicagoCluster.chicagoClient.getNodeList(key.getBytes());
         nodes.forEach(n -> {
@@ -127,7 +134,7 @@ public class ClusterTest {
         });
     }
 
-
+    @Test @Parameterized.Parameters
     public void testReplication() throws Exception{
         String tsKey = "tsRepKey";
         deleteColFam(tsKey);
@@ -191,6 +198,7 @@ public class ClusterTest {
         }
     }
 
+
     public void remoteExec(String ip, String command) throws Exception{
         String host=ip;
         String user="prodngdev";
@@ -239,18 +247,17 @@ public class ClusterTest {
         }
     }
 
-    public static void main(String[] args){
-        ClusterTest ct = new ClusterTest();
+ /*   public static void main(String[] args){
+       *//* ClusterTest ct = new ClusterTest();
         try{
-            ct.setup();
-            ct.writeTSSequence();
-            ct.writeCCSequence();
-            ct.testReplication();
+            //ct.setup();
+            //ct.writeTSSequence();
+           // ct.writeCCSequence();
+            //ct.testReplication();
         }catch (Exception e){
             e.printStackTrace();
         }
-        System.exit(0);
+        System.exit(0);*//*
     }
-
-
+*/
 }

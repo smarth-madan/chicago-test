@@ -50,14 +50,13 @@ public class WriteTest implements Runnable {
       String v = "val" +valCount + "TTE";
       byte[] val = v.getBytes();
       System.arraycopy(v.getBytes(),0,val,0,v.getBytes().length);
-      System.out.println("Writing :"+ v);
       ListenableFuture<List<byte[]>> future = cts.tsWrite(key.getBytes(),val);
       Futures.addCallback(future, new FutureCallback<List<byte[]>>() {
         @Override
         public void onSuccess(@Nullable List<byte[]> bytes) {
           if(!bytes.isEmpty()) {
             long o = Longs.fromByteArray(bytes.get(0));
-            System.out.println(o);
+            //System.out.println(o);
           }else{
             System.out.println("Failed "+ v);
           }
@@ -104,11 +103,12 @@ public class WriteTest implements Runnable {
       ctsa[i] = new ChicagoClient("10.24.25.188:12000");
       Thread.sleep(500);
     }
-
+    Random r = new Random();
     System.out.println("########       Statring writes        #########");
     long startTime = System.currentTimeMillis();
     for (int i = 0; i < loop; i++) {
         executor.submit(new WriteTest(latch, ctsa[i % clients], i));
+        //Thread.sleep(1);
     }
 
     latch.await();

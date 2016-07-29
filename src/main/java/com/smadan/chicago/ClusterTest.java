@@ -1,10 +1,11 @@
 package com.smadan.chicago;
 
-import com.google.common.primitives.Ints;
+import com.google.common.primitives.Longs;
 import com.jcraft.jsch.Channel;
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
+import com.xjeffrose.chicago.ChiUtil;
 import com.xjeffrose.chicago.client.ChicagoClient;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,11 +53,12 @@ public class ClusterTest {
         byte[] offset = null;
         String tsKey = "testKey";
         deleteColFam(tsKey);
-        List<String> nodes = testChicagoCluster.chicagoTSClient.getNodeList(tsKey.getBytes());
+        List<String> nodes = testChicagoCluster.chicagoClient.getNodeList(tsKey.getBytes());
         for (int i = 0; i < 30; i++) {
             String _v = "val" + i;
             byte[] val = _v.getBytes();
-            assertEquals(i,Ints.fromByteArray(testChicagoCluster.chicagoTSClient.write(tsKey.getBytes(), val)));
+            assertEquals(i,
+                Longs.fromByteArray(testChicagoCluster.chicagoClient.tsWrite(tsKey.getBytes(), val).get().get(0)));
         }
         assertTSClient(tsKey,29,"val29");
 
@@ -64,19 +66,19 @@ public class ClusterTest {
         int key  = 29;
         String val  = "value29";
         //write
-        assertEquals(23,Ints.fromByteArray(testChicagoCluster.chicagoTSClient._write(tsKey.getBytes(),Ints.toByteArray(key), val.getBytes()).get()));
+        long l = Longs.fromByteArray(testChicagoCluster.chicagoClient.tsWrite(tsKey.getBytes(),Longs.toByteArray(key), val.getBytes()).get().get(0));
         //Assert no overwrite took place
         assertTSClient(tsKey,key,"val29");
         //deleteColFam(tsKey);
     }
 
     public void assertTSClient(String colFam, int key, String val){
-        List<String> nodes = testChicagoCluster.chicagoTSClient.getNodeList(colFam.getBytes());
+        List<String> nodes = testChicagoCluster.chicagoClient.getEffectiveNodes(colFam.getBytes());
         nodes.forEach(n -> {
             System.out.println("Checking node "+n);
             try {
                 ChicagoClient cc = new ChicagoClient(n);
-                assertEquals(val,new String(cc.read(colFam.getBytes(), Ints.toByteArray(key)).get()));
+                assertEquals(val,new String(cc.read(colFam.getBytes(), Longs.toByteArray(key)).get().get(0)));
             }catch (Exception e){
                 e.printStackTrace();
                 return;
@@ -92,7 +94,7 @@ public class ClusterTest {
             String key = "key"+i;
             String _v = "val" + i;
             byte[] val = _v.getBytes();
-            assertTrue(testChicagoCluster.chicagoClient.write(key.getBytes(), val));
+            assertTrue(testChicagoCluster.chicagoClient.write(key.getBytes(), val).get().get(0)[0] != 0);
         }
 
         //Assert all nodes have the data
@@ -101,7 +103,7 @@ public class ClusterTest {
         //Test overwriting of data
         String key = "key29";
         String val  = "value29";
-        assertTrue(testChicagoCluster.chicagoClient.write(key.getBytes(), val.getBytes()));
+        assertTrue(testChicagoCluster.chicagoClient.write(key.getBytes(), val.getBytes()).get().get(0)[0] != 0);
         //Assert overwrite is successful
         assertCCdata(key,val);
         deleteColFam("chicago");
@@ -109,11 +111,11 @@ public class ClusterTest {
 
 
     public void assertCCdata(String key,String val){
-        List<String> nodes = testChicagoCluster.chicagoClient.getNodeList(key.getBytes());
+        List<String> nodes = testChicagoCluster.chicagoClient.getEffectiveNodes(ChiUtil.defaultColFam.getBytes());
         nodes.forEach(n -> {
             ChicagoClient cc = testChicagoCluster.chicagoClientHashMap.get(forServer(n));
             try {
-                assertEquals(val,new String(cc.read(key.getBytes()).get()));
+                assertEquals(val,new String(cc.read(key.getBytes()).get().get(0)));
             }catch (Exception e){
                 e.printStackTrace();
             }
@@ -123,54 +125,60 @@ public class ClusterTest {
     @Test @Parameterized.Parameters
     public void testReplication() throws Exception{
         String tsKey = "tsRepKey";
-        deleteColFam(tsKey);
-        List<String> nodes = testChicagoCluster.chicagoTSClient.getNodeList(tsKey.getBytes());
-        assert(true == !testChicagoCluster.zkClient.list("/chicago/node-list").isEmpty());
-        //Write some data.
-        for (int i = 0; i < 2000; i++) {
-            String _v = "val" + i;
-            byte[] val = _v.getBytes();
-            testChicagoCluster.chicagoTSClient.write(tsKey.getBytes(), val);
-            if(i%50==0) System.out.println(i);
-        }
-        assertTSClient(tsKey,90,"val90");
+        try {
+            deleteColFam(tsKey);
+            List<String> nodes = testChicagoCluster.chicagoClient.getNodeList(tsKey.getBytes());
+            assert (true == !testChicagoCluster.zkClient.list("/chicago/node-list").isEmpty());
+            //Write some data.
+            for (int i = 0; i < 2000; i++) {
+                String _v = "val" + i;
+                byte[] val = _v.getBytes();
+                testChicagoCluster.chicagoClient.tsWrite(tsKey.getBytes(), val);
+                if (i % 50 == 0) System.out.println(i);
+            }
+            assertTSClient(tsKey, 90, "val90");
 
-        //Bring down the node.
-        String server = nodes.get(0).split(":")[0];
-        System.out.println("Shutting down "+ server);
-        String command = "sudo kill $(ps aux|  grep 'chicago'  | awk '{print $2}')";
-        remoteExec(server,command);
+            //Bring down the node.
+            String server = nodes.get(0).split(":")[0];
+            System.out.println("Shutting down " + server);
+            String command = "sudo kill $(ps aux|  grep 'chicago'  | awk '{print $2}')";
+            remoteExec(server, command);
 
+            //Check for node in Zookeeper.
+            long startTime = System.currentTimeMillis();
+            String path = testChicagoCluster.NODE_LOCK_PATH + "/" + tsKey;
+            //Wait for replication to happen
+            List<String> repNodes = testChicagoCluster.zkClient.list(path);
+            while (repNodes.size() < 2) {
+                repNodes = testChicagoCluster.zkClient.list(path);
+            }
+            System.out.println("Lock path populated in "
+                + (System.currentTimeMillis() - startTime)
+                + "ms  repNode :"
+                + repNodes.toString());
 
-        //Check for node in Zookeeper.
-        long startTime  = System.currentTimeMillis();
-        String path = testChicagoCluster.NODE_LOCK_PATH+"/"+tsKey;
-        //Wait for replication to happen
-        List<String> repNodes = testChicagoCluster.zkClient.list(path);
-        while(repNodes.isEmpty()){
+            assertTSClient(tsKey, 90, "val90");
             repNodes = testChicagoCluster.zkClient.list(path);
+            while (!repNodes.isEmpty()) {
+                Thread.sleep(10);
+                repNodes = testChicagoCluster.zkClient.list(path);
+            }
+            //Thread.sleep(2000);
+            assertTSClient(tsKey, 90, "val90");
+
+            //Bring the server back up again.
+            System.out.println("Starting server " + server);
+            command = "sudo sh -c \"cd /home/smadan/chicago; ./chicago &\"";
+            remoteExec(server, command);
+
+            //Thread.sleep(2000);
+            assertTSClient(tsKey, 90, "val90");
+        }catch ( Exception e){
+            e.printStackTrace();
+            throw e;
+        }finally {
+            deleteColFam(tsKey);
         }
-        System.out.println("Lock path populated in "+ (System.currentTimeMillis() - startTime) + "ms  repNode :" + repNodes.toString());
-
-        assertTSClient(tsKey,90,"val90");
-        repNodes = testChicagoCluster.zkClient.list(path);
-        while(!repNodes.isEmpty()){
-            Thread.sleep(10);
-            repNodes = testChicagoCluster.zkClient.list(path);
-        }
-        Thread.sleep(2000);
-        assertTSClient(tsKey,90,"val90");
-
-
-        //Bring the server back up again.
-        System.out.println("Starting server "+ server);
-        command = "sudo sh -c \"cd /home/smadan/chicago; ./chicago &\"";
-        remoteExec(server,command);
-
-        Thread.sleep(2000);
-        assertTSClient(tsKey,90,"val90");
-
-        deleteColFam(tsKey);
     }
 
     public void deleteColFam(String colFam){

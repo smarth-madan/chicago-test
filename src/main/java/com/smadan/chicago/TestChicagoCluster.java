@@ -2,10 +2,8 @@ package com.smadan.chicago;
 
 import com.xjeffrose.chicago.ZkClient;
 import com.xjeffrose.chicago.client.ChicagoClient;
-import com.xjeffrose.chicago.client.ChicagoTSClient;
 
 import com.xjeffrose.chicago.client.ChicagoClient;
-import com.xjeffrose.chicago.client.ChicagoTSClient;
 
 import java.util.HashMap;
 
@@ -19,9 +17,7 @@ public class TestChicagoCluster {
 
     public ZkClient zkClient;
     public final HashMap<String, ChicagoClient> chicagoClientHashMap = new HashMap<>();
-    public final HashMap<String, ChicagoTSClient> chicagoTSClientHashMap = new HashMap<>();
     public final ChicagoClient chicagoClient;
-    public final ChicagoTSClient chicagoTSClient;
     public HashMap<String, String> servers;
     public final static String ELECTION_PATH = "/chicago/chicago-elect";
     public final static String NODE_LIST_PATH = "/chicago/node-list";
@@ -29,20 +25,16 @@ public class TestChicagoCluster {
 
     public TestChicagoCluster(HashMap<String,String> servers, String zkConnectString, int quorom) throws Exception{
         this.servers = servers;
-        zkClient = new ZkClient(zkConnectString);
+        zkClient = new ZkClient(zkConnectString,false);
         zkClient.start();
         chicagoClient = new ChicagoClient(zkConnectString,quorom);
-        chicagoTSClient = new ChicagoTSClient(zkConnectString,quorom);
         chicagoClient.startAndWaitForNodes(quorom);
-        chicagoTSClient.startAndWaitForNodes(quorom);
 
         servers.keySet().forEach(k ->{
             try {
                 String server = servers.get(k);
                 ChicagoClient ccl = new ChicagoClient(server);
-                ChicagoTSClient ccts = new ChicagoTSClient(server);
                 chicagoClientHashMap.put(k,ccl);
-                chicagoTSClientHashMap.put(k,ccts);
             }catch (Exception e){
                 e.printStackTrace();
             }

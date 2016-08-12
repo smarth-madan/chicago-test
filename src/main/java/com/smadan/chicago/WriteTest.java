@@ -50,13 +50,22 @@ public class WriteTest implements Runnable {
       String v = "val" +valCount + "TTE";
       byte[] val = v.getBytes();
       System.arraycopy(v.getBytes(),0,val,0,v.getBytes().length);
-      ListenableFuture<List<byte[]>> future = cts.tsWrite(key.getBytes(),val);
+      ListenableFuture<List<byte[]>> future = null;
+      try {
+        future = cts.tsWrite(key.getBytes(),val);
+      } catch (InterruptedException e) {
+        e.printStackTrace();e.printStackTrace();
+      } catch (TimeoutException e) {
+        e.printStackTrace();
+      } catch (ExecutionException e) {
+        e.printStackTrace();
+      }
       Futures.addCallback(future, new FutureCallback<List<byte[]>>() {
         @Override
         public void onSuccess(@Nullable List<byte[]> bytes) {
           if(!bytes.isEmpty()) {
             long o = Longs.fromByteArray(bytes.get(0));
-            //System.out.println(o);
+            System.out.println(o);
           }else{
             System.out.println("Failed "+ v);
           }
@@ -98,9 +107,9 @@ public class WriteTest implements Runnable {
     keys = new Long[loop];
     for(int i =0;i<clients;i++){
       //ctsa[i] =  new ChicagoClient("10.22.100.183:2181,10.25.180.234:2181,10.22.103.86:2181,10.25.180.247:2181,10.25.69.226:2181",3);
-      //ctsa[i] = new ChicagoClient("10.24.25.188:2181,10.24.25.189:2181,10.25.145.56:2181,10.24.33.123:2181",3);
+      ctsa[i] = new ChicagoClient("10.24.25.188:2181,10.24.25.189:2181,10.25.145.56:2181,10.24.33.123:2181",3);
       //ctsa[i].startAndWaitForNodes(4);
-      ctsa[i] = new ChicagoClient("10.24.25.188:12000");
+      //ctsa[i] = new ChicagoClient("10.24.25.188:12000");
       Thread.sleep(500);
     }
     Random r = new Random();
@@ -108,7 +117,9 @@ public class WriteTest implements Runnable {
     long startTime = System.currentTimeMillis();
     for (int i = 0; i < loop; i++) {
         executor.submit(new WriteTest(latch, ctsa[i % clients], i));
-        //Thread.sleep(1);
+      if(i%5 ==0) {
+        Thread.sleep(0, 10);
+      }
     }
 
     latch.await();

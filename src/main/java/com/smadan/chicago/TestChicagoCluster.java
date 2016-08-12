@@ -3,8 +3,6 @@ package com.smadan.chicago;
 import com.xjeffrose.chicago.ZkClient;
 import com.xjeffrose.chicago.client.ChicagoClient;
 
-import com.xjeffrose.chicago.client.ChicagoClient;
-
 import java.util.HashMap;
 
 
@@ -28,12 +26,13 @@ public class TestChicagoCluster {
         zkClient = new ZkClient(zkConnectString,false);
         zkClient.start();
         chicagoClient = new ChicagoClient(zkConnectString,quorom);
-        chicagoClient.startAndWaitForNodes(quorom);
+        chicagoClient.startAndWaitForNodes(3);
 
         servers.keySet().forEach(k ->{
             try {
                 String server = servers.get(k);
                 ChicagoClient ccl = new ChicagoClient(server);
+                ccl.startAndWaitForNodes(1);
                 chicagoClientHashMap.put(k,ccl);
             }catch (Exception e){
                 e.printStackTrace();
